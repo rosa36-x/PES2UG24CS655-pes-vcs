@@ -139,14 +139,46 @@ int tree_from_index(ObjectID *id_out) {
     Tree tree;
     tree.count = 0;
 
-    // Step 2: Copy index entries into tree (flat for now)
+    // Step 2: Separate files and directories
     for (int i = 0; i < index.count; i++) {
-        TreeEntry *entry = &tree.entries[tree.count++];
+        char *slash = strchr(index.entries[i].path, '/');
 
-        entry->mode = index.entries[i].mode;
-        strncpy(entry->name, index.entries[i].path, sizeof(entry->name));
-        entry->hash = index.entries[i].hash;
+        if (!slash) {
+            // FILE in root
+            TreeEntry *entry = &tree.entries[tree.count++];
+
+            entry->mode = index.entries[i].mode;
+            strncpy(entry->name, index.entries[i].path, sizeof(entry->name));
+            entry->hash = index.entries[i].hash;
+
+        } else {
+            // DIRECTORY (take first component)
+            char dirname[256];
+            size_t len = slash - index.entries[i].path;
+            strncpy(dirname, index.entries[i].path, len);
+            dirname[len] = '\0';
+
+            // Check if already added
+            int exists = 0;
+            for (int j = 0; j < tree.count; j++) {
+                if (strcmp(tree.entries[j].name, dirname) == 0) {
+                    exists = 1;
+                    break;
+                }
+            }
+
+            if (!exists) {
+                TreeEntry *entry = &tree.entries[tree.count++];
+
+                entry->mode = MODE_DIR;
+                strcpy(entry->name, dirname);
+
+                // TEMP: dummy hash (will fix in next step)
+                memset(entry->hash.hash, 0, HASH_SIZE);
+            }
+        }
     }
+
 
     // Step 3: Serialize tree
     void *data;
