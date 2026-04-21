@@ -16,6 +16,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <openssl/evp.h>
+#include <errno.h>
+
 
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
@@ -93,6 +95,7 @@ int object_exists(const ObjectID *id) {
 
 //
 // Returns 0 on success, -1 on error.
+
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
     // Step 1: Convert type enum → string
     const char *type_str;
@@ -115,9 +118,6 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     memcpy(full, header, header_len);
     memcpy(full + header_len, data, len);
 
-    // TEMP: store pointer in id_out just to avoid unused warnings (we'll replace later)
-    (void)id_out;
-
     // Step 4: Compute hash of full object
     compute_hash(full, total_size, id_out);
 
@@ -133,7 +133,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     // Extract directory path (.pes/objects/XX)
     char dir[512];
-    strncpy(dir, path, sizeof(dir));
+    snprintf(dir, sizeof(dir), "%s", path);
     char *slash = strrchr(dir, '/');
     if (!slash) {
         free(full);
@@ -141,12 +141,23 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     }
     *slash = '\0';
 
-    // Create directory if it doesn't exist
-    mkdir(dir, 0755);
+    // Step 7: Ensure directories exist
+    if (mkdir(".pes", 0755) < 0 && errno != EEXIST) {
+        free(full);
+        return -1;
+    }
+    if (mkdir(OBJECTS_DIR, 0755) < 0 && errno != EEXIST) {
+        free(full);
+        return -1;
+    }
+    if (mkdir(dir, 0755) < 0 && errno != EEXIST) {
+        free(full);
+        return -1;
+    }
 
-    // Step 7: Write to temp file
+    // Step 8: Write to temp file
     char tmp_path[512];
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+    snprintf(tmp_path, sizeof(tmp_path), "%s%s", path, ".tmp");
 
     int fd = open(tmp_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
     if (fd < 0) {
@@ -154,14 +165,19 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         return -1;
     }
 
-    ssize_t written = write(fd, full, total_size);
-    if (written != (ssize_t)total_size) {
-        close(fd);
-        free(full);
-        return -1;
+    // Handle partial writes
+    ssize_t total_written = 0;
+    while (total_written < (ssize_t)total_size) {
+        ssize_t w = write(fd, full + total_written, total_size - total_written);
+        if (w <= 0) {
+            close(fd);
+            free(full);
+            return -1;
+        }
+        total_written += w;
     }
 
-    // Step 8: fsync temp file
+    // Step 9: fsync temp file
     if (fsync(fd) < 0) {
         close(fd);
         free(full);
@@ -170,13 +186,13 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     close(fd);
 
-    // Step 9: Atomic rename to final path
+    // Step 10: Atomic rename
     if (rename(tmp_path, path) < 0) {
         free(full);
         return -1;
     }
 
-    // Step 10: fsync directory (persist rename)
+    // Step 11: fsync directory
     int dir_fd = open(dir, O_RDONLY);
     if (dir_fd >= 0) {
         fsync(dir_fd);
@@ -185,8 +201,8 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     free(full);
     return 0;
-
 }
+
 
 
 // Read an object from the store.
