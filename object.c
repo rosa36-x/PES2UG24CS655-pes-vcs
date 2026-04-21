@@ -120,12 +120,30 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     // Step 4: Compute hash of full object
     compute_hash(full, total_size, id_out);
-    
+
     // Step 5: Deduplication check
     if (object_exists(id_out)) {
         free(full);
         return 0;
     }
+
+    // Step 6: Build object path
+    char path[512];
+    object_path(id_out, path, sizeof(path));
+
+    // Extract directory path (.pes/objects/XX)
+    char dir[512];
+    strncpy(dir, path, sizeof(dir));
+    char *slash = strrchr(dir, '/');
+    if (!slash) {
+        free(full);
+        return -1;
+    }
+    *slash = '\0';
+
+    // Create directory if it doesn't exist
+    mkdir(dir, 0755);
+
 
 
     free(full);
