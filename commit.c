@@ -214,4 +214,16 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     } else {
         commit.has_parent = 0;
     }
+
+    // 4. Serialize and write commit object
+    void *commit_data;
+    size_t commit_len;
+
+    if (object_write(OBJ_COMMIT, commit_data, commit_len, commit_id_out) != 0) {
+        free(commit_data); return -1;
+    }
+    free(commit_data);
+
+    // 5. Update HEAD to point to new commit
+    return head_update(commit_id_out);
 }
