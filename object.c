@@ -118,7 +118,9 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     // TEMP: store pointer in id_out just to avoid unused warnings (we'll replace later)
     (void)id_out;
 
-    // For now, just free and return success
+    // Step 4: Compute hash of full object
+    compute_hash(full, total_size, id_out);
+
     free(full);
     return 0;
 }
