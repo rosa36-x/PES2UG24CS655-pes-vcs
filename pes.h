@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 #define HASH_SIZE 32        // SHA-256 produces 32 bytes
@@ -33,6 +34,7 @@ typedef enum {
 typedef struct {
     uint8_t hash[HASH_SIZE];
 } ObjectID;
+
 
 // ─── Utility Functions (implement in object.c) ─────────────────────────────
 
