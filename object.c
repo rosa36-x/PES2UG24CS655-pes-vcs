@@ -120,6 +120,13 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     // Step 4: Compute hash of full object
     compute_hash(full, total_size, id_out);
+    
+    // Step 5: Deduplication check
+    if (object_exists(id_out)) {
+        free(full);
+        return 0;
+    }
+
 
     free(full);
     return 0;
