@@ -144,10 +144,48 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     // Create directory if it doesn't exist
     mkdir(dir, 0755);
 
+    // Step 7: Write to temp file
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
 
+    int fd = open(tmp_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0) {
+        free(full);
+        return -1;
+    }
+
+    ssize_t written = write(fd, full, total_size);
+    if (written != (ssize_t)total_size) {
+        close(fd);
+        free(full);
+        return -1;
+    }
+
+    // Step 8: fsync temp file
+    if (fsync(fd) < 0) {
+        close(fd);
+        free(full);
+        return -1;
+    }
+
+    close(fd);
+
+    // Step 9: Atomic rename to final path
+    if (rename(tmp_path, path) < 0) {
+        free(full);
+        return -1;
+    }
+
+    // Step 10: fsync directory (persist rename)
+    int dir_fd = open(dir, O_RDONLY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
 
     free(full);
     return 0;
+
 }
 
 
