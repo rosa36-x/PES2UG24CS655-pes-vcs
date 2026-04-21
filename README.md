@@ -2,8 +2,8 @@
 
 ## Lab Report
 
-**Name:** Rosalin Verma 
-**SRN:** PES2UG24CS655 
+**Name:** Rosalin Verma  
+**SRN:** PES2UG24CS655  
 
 ---
 
