@@ -8,6 +8,7 @@
 //
 // Example single entry (conceptual):
 //   "100644 hello.txt\0" followed by 32 raw bytes of SHA-256
+#include "pes.h" 
 #include "index.h"  
 #include "tree.h"
 #include <stdio.h>
@@ -202,11 +203,16 @@ static int build_tree(IndexEntry *entries, int count, ObjectID *id_out) {
     free(data);
     return rc;
 }
-
 int tree_from_index(ObjectID *id_out) {
-    Index index;
+    Tree tree;
+    tree.count = 0;
 
-    if (index_load(&index) < 0) return -1;
+    void *data;
+    size_t len;
 
-    return build_tree(index.entries, index.count, id_out);
+    if (tree_serialize(&tree, &data, &len) < 0) return -1;
+
+    int rc = object_write(OBJ_TREE, data, len, id_out);
+    free(data);
+    return rc;
 }
