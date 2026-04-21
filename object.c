@@ -232,3 +232,40 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     (void)id; (void)type_out; (void)data_out; (void)len_out;
     return -1;
 }
+int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
+    // Step 1: Build file path
+    char path[512];
+    object_path(id, path, sizeof(path));
+
+    // Step 2: Open file
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    // Step 3: Get file size
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    rewind(f);
+
+    // Step 4: Read full file into buffer
+    unsigned char *buf = malloc(size);
+    if (!buf) {
+        fclose(f);
+        return -1;
+    }
+
+    if (fread(buf, 1, size, f) != (size_t)size) {
+        fclose(f);
+        free(buf);
+        return -1;
+    }
+
+    fclose(f);
+
+    // TEMP: avoid unused warnings
+    (void)type_out;
+    (void)data_out;
+    (void)len_out;
+
+    free(buf);
+    return -1; // still incomplete
+}
