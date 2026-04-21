@@ -148,7 +148,7 @@ int index_load(Index *index) {
 
         char hash_hex[HASH_HEX_SIZE + 1];
 
-        int ret = fscanf(f, "%o %64s %ld %ld %255s\n",
+        int ret = fscanf(f, "%o %64s %ld %u %255s\n",
                          &entry->mode,
                          hash_hex,
                          &entry->mtime_sec,
@@ -184,12 +184,49 @@ int index_load(Index *index) {
 //   - rename                           : atomically moving the temp file over the old index
 //
 // Returns 0 on success, -1 on error.
-int index_save(const Index *index) {
-    // TODO: Implement atomic index saving
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
+static int compare_index_entries(const void *a, const void *b) {
+    return strcmp(((const IndexEntry *)a)->path,
+                  ((const IndexEntry *)b)->path);
 }
+
+int index_save(const Index *index) {
+    // Step 1: Make a sorted copy
+    Index temp = *index;
+    qsort(temp.entries, temp.count, sizeof(IndexEntry), compare_index_entries);
+
+    // Step 2: Ensure .pes exists
+    mkdir(".pes", 0755);
+
+    // Step 3: Write to temp file
+    FILE *f = fopen(".pes/index.tmp", "w");
+    if (!f) return -1;
+
+    for (int i = 0; i < temp.count; i++) {
+        char hash_hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&temp.entries[i].hash, hash_hex);
+
+        fprintf(f, "%o %s %ld %u %s\n",
+                temp.entries[i].mode,
+                hash_hex,
+                temp.entries[i].mtime_sec,
+                temp.entries[i].size,
+                temp.entries[i].path);
+    }
+
+    // Step 4: flush + fsync
+    fflush(f);
+    int fd = fileno(f);
+    fsync(fd);
+    fclose(f);
+
+    // Step 5: atomic rename
+    if (rename(".pes/index.tmp", ".pes/index") < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
 
 // Stage a file for the next commit.
 //
