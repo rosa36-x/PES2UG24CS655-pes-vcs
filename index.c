@@ -14,7 +14,7 @@
 //
 // PROVIDED functions: index_find, index_remove, index_status
 // TODO functions:     index_load, index_save, index_add
-
+#include "pes.h"   // for hex_to_hash, ObjectID
 #include "index.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -135,11 +135,44 @@ int index_status(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_load(Index *index) {
-    // TODO: Implement index loading
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
+    index->count = 0;
+
+    FILE *f = fopen(".pes/index", "r");
+    if (!f) {
+        // No index yet → empty index
+        return 0;
+    }
+
+    while (index->count < MAX_INDEX_ENTRIES) {
+        IndexEntry *entry = &index->entries[index->count];
+
+        char hash_hex[HASH_HEX_SIZE + 1];
+
+        int ret = fscanf(f, "%o %64s %ld %ld %255s\n",
+                         &entry->mode,
+                         hash_hex,
+                         &entry->mtime_sec,
+                         &entry->size,
+                         entry->path);
+
+        if (ret == EOF) break;
+        if (ret != 5) {
+            fclose(f);
+            return -1;
+        }
+
+        if (hex_to_hash(hash_hex, &entry->hash) < 0) {
+            fclose(f);
+            return -1;
+        }
+
+        index->count++;
+    }
+
+    fclose(f);
+    return 0;
 }
+
 
 // Save the index to .pes/index atomically.
 //
