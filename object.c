@@ -228,11 +228,6 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 // The caller is responsible for calling free(*data_out).
 // Returns 0 on success, -1 on error (file not found, corrupt, etc.).
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
-    // TODO: Implement
-    (void)id; (void)type_out; (void)data_out; (void)len_out;
-    return -1;
-}
-int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
     // Step 1: Build file path
     char path[512];
     object_path(id, path, sizeof(path));
@@ -246,7 +241,7 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     long size = ftell(f);
     rewind(f);
 
-    // Step 4: Read full file into buffer
+    // Step 4: Read full file
     unsigned char *buf = malloc(size);
     if (!buf) {
         fclose(f);
@@ -258,14 +253,65 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
         free(buf);
         return -1;
     }
-
     fclose(f);
 
-    // TEMP: avoid unused warnings
-    (void)type_out;
-    (void)data_out;
-    (void)len_out;
+    // Step 5: Verify hash (integrity check)
+    ObjectID computed;
+    compute_hash(buf, size, &computed);
+    if (memcmp(computed.hash, id->hash, HASH_SIZE) != 0) {
+        free(buf);
+        return -1;
+    }
+
+    // Step 6: Find header-data separator
+    char *null_pos = memchr(buf, '\0', size);
+    if (!null_pos) {
+        free(buf);
+        return -1;
+    }
+
+    // Step 7: Parse header
+    char type_str[16];
+    size_t data_size;
+
+    if (sscanf((char *)buf, "%15s %zu", type_str, &data_size) != 2) {
+        free(buf);
+        return -1;
+    }
+
+    // Step 8: Set type
+    if (strcmp(type_str, "blob") == 0) {
+        *type_out = OBJ_BLOB;
+    } else if (strcmp(type_str, "tree") == 0) {
+        *type_out = OBJ_TREE;
+    } else if (strcmp(type_str, "commit") == 0) {
+        *type_out = OBJ_COMMIT;
+    } else {
+        free(buf);
+        return -1;
+    }
+
+    // Step 9: Extract data
+    unsigned char *data_start = (unsigned char *)null_pos + 1;
+
+    // Validate size
+    if ((size_t)(buf + size - data_start) != data_size) {
+        free(buf);
+        return -1;
+    }
+
+    void *data = malloc(data_size);
+    if (!data) {
+        free(buf);
+        return -1;
+    }
+
+    memcpy(data, data_start, data_size);
+
+    *data_out = data;
+    *len_out = data_size;
 
     free(buf);
-    return -1; // still incomplete
+    return 0;
 }
+
